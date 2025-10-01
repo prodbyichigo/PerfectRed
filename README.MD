@@ -1,17 +1,22 @@
 # <span style="color:red">PerfectRed</span>
-<font color="red">This is also red text</font>
 
-A fast, lightweight manga reader built with Node.js + Express.  
-Easily read your favorite manga with a clean interface and smooth navigation.  
+A fast expressJS localhost manga/anime (anime is kinda bad rn im working on it) watcher/reader
+The theme is red :tongue:
 
 ---
 
 ## ✨ Features
-- 🖼️ Clean & minimal reader UI  
-- 📂 Supports `.cbz` / `.zip` manga archives  
-- 🔍 Zoom, scroll, and page navigation  
-- 📱 Responsive design (works on desktop + mobile)  
-- ⚡ Super fast loading  
+- Supports cbz and zip (i recommend using hakuneko for procuring the files)
+- Saves progress in neat tiles.
+- Fast file retrieval and regex match.
+- Nice theme!
+
+---
+
+## 🗺️ Roadmap
+- I want to add better anime support
+- A login system (cookies are quite bad right now
+- Cover images from manga folder (i use a static image because the covers didnt scale very well
 
 ---
 
@@ -23,14 +28,17 @@ Easily read your favorite manga with a clean interface and smooth navigation.
 ### Library View
 ![Library Screenshot](./public/screenshots/library.png)
 
-*(Add screenshots into `public/screenshots/` or link from GitHub Issues/Discussions if you prefer)*  
-
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Install
 ```bash
-git clone https://github.com/YOURNAME/manga-reader.git
-cd manga-reader
-npm install
+git clone https://github.com/crashpenguin/PerfectRed.git
+```
+
+Run the install.bat or run npm install inside the perfectred directory and this will install the dependencies.
+
+run the install.sh for mac or linux and install.bat for windows
+
+put your mangas in data/ in the format of folders full of chapter [#].cbz
