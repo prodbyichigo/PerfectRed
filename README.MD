@@ -1,4 +1,4 @@
-# 📖 Manga Reader
+# <span style="color:red">PerfectRed</span>
 
 A fast, lightweight manga reader built with Node.js + Express.  
 Easily read your favorite manga with a clean interface and smooth navigation.  
