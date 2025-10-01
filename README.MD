@@ -23,10 +23,10 @@ The theme is red :tongue:
 ## 📸 Preview
 
 ### Reader UI
-![Reader Screenshot](./public/screenshots/reader.png)
+![Reader Screenshot](./public/githubstuff/reader.png)
 
 ### Library View
-![Library Screenshot](./public/screenshots/library.png)
+![Library Screenshot](./public/githubstuff/library.png)
 
 ---
 
