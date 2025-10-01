@@ -22,6 +22,10 @@ The theme is red :tongue:
 
 ## 📸 Preview
 
+### Homepage View
+
+![Homepage Screenshot](./public/githubstuff/Homepage.png)
+
 ### Reader UI
 ![Reader Screenshot](./public/githubstuff/Reader.png)
 
