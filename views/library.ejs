@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PerfectRed</title>
+  <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+  <link rel="icon" href="data:image/png;base64,<%= faviconBase64 %>" type="image/png">
+</head>
+<body>
+  <div class="version-id" id="version"></div>
+  <script>
+    fetch("/version")
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("version").textContent = "v" + data.version;
+      });
+  </script>
+
+  <!-- Navbar -->
+  <nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/library">Library</a></li>
+      <li><a href="/settings">Settings</a></li>
+    </ul>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <center><h1 style="margin-top: 30px; margin-bottom: 30px;">Library</h1></center>
+      <a href="/library" style="margin-left: 10px; color: red;">Home</a>
+      <% if (breadcrumbs.length > 0) { %>
+        <% breadcrumbs.forEach((crumb, index) => { %>
+          <span>›</span>
+          <% if (index === breadcrumbs.length - 1) { %>
+            <span class="current-folder"><%= crumb.name %></span>
+          <% } else { %>
+            <a href="/library?folder=<%= encodeURIComponent(crumb.path) %>"><%= crumb.name %></a>
+          <% } %>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <!-- Manga Section -->
+    <% if (mangaFolders.length > 0) { %>
+      <div class="folders-section" style="margin-left: 15px;">
+        <h2 style="padding-top: 5px; padding-bottom: 5px;">Manga</h2>
+        <div class="grid">
+          <% mangaFolders.forEach(folder => { %>
+            <div class="tile folder-tile" onclick="openFolder('<%= folder.path %>')">
+              <strong class="file-name"><%= folder.name %></strong>
+              <div class="file-count"><%= folder.fileCount %> Chapter(s)</div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Anime Section -->
+    <% if (animeFolders.length > 0) { %>
+      <div class="folders-section" style="margin-left: 15px; margin-top: 30px;">
+        <h2 style="padding-top: 5px; padding-bottom: 5px;">Anime</h2>
+        <div class="grid">
+          <% animeFolders.forEach(folder => { %>
+            <div class="tile folder-tile" onclick="openFolder('<%= folder.path %>')">
+              <strong class="file-name"><%= folder.name %></strong>
+              <div class="file-count"><%= folder.fileCount %> Episode(s)</div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Individual Files Section -->
+    <% if (files.length > 0) { %>
+      <% 
+        var videoFiles = files.filter(function(f) { return f.type === '.webm'; });
+        var novelFiles = files.filter(function(f) { return ['.txt', '.epub', '.pdf'].includes(f.type); });
+        var otherFiles = files.filter(function(f) { return !['.webm', '.txt', '.epub', '.pdf'].includes(f.type); });
+      %>
+      
+      <!-- Videos -->
+      <% if (videoFiles.length > 0) { %>
+        <h2 style="margin-left: 10px; margin-top: 30px;">Videos</h2>
+        <div class="grid" style="margin-left: 10px;">
+          <% videoFiles.forEach(function(file) { %>
+            <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
+              <div class="file-icon">🎬</div>
+              <strong class="file-name"><%= file.name %></strong>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+      
+      <!-- Novels -->
+      <% if (novelFiles.length > 0) { %>
+        <h2 style="margin-left: 10px; margin-top: 30px;">Novels</h2>
+        <div class="grid" style="margin-left: 10px;">
+          <% novelFiles.forEach(function(file) { %>
+            <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
+              <div class="file-icon">
+                <% if (file.type === '.txt') { %>📄
+                <% } else if (file.type === '.epub') { %>
+                  <img src="data:image/png;base64,<%= faviconBase64 %>" class="file-icon-img" alt="EPUB">
+                <% } else if (file.type === '.pdf') { %>
+                  <img src="data:image/png;base64,<%= faviconBase64 %>" class="file-icon-img" alt="PDF">
+                <% } else { %>📄<% } %>
+              </div>
+              <strong class="file-name"><%= file.name %></strong>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+      
+      <!-- Other Files -->
+      <% if (otherFiles.length > 0) { %>
+        <h2 style="margin-left: 10px; margin-top: 30px;">Other Files</h2>
+        <div class="grid" style="margin-left: 10px;">
+          <% otherFiles.forEach(function(file) { %>
+            <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
+              <div class="file-icon">
+                <% if (['.cbz', '.zip'].includes(file.type)) { %>
+                  <img src="data:image/png;base64,<%= faviconBase64 %>" class="file-icon-img" alt="Archive">
+                <% } else if (['.jpg','.jpeg','.png','.gif'].includes(file.type)) { %>
+                  <!-- You can put an icon or leave it empty -->
+                  🖼️
+                <% } else { %>
+                  ❓
+                <% } %>
+              </div>
+              <strong class="file-name"><%= file.name %></strong>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    <% } %>
+
+    <!-- Empty State -->
+    <% if (mangaFolders.length === 0 && animeFolders.length === 0 && files.length === 0) { %>
+      <div class="empty-message">
+        This folder is empty
+        <br><br>
+        <a href="/library">← Back to Library</a>
+      </div>
+    <% } %>
+
+    <!-- File Content Viewer (for text only) -->
+    <div id="fileContent" style="margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; min-height: 100px; display: none;">
+      Click a text file to preview its content.
+    </div>
+  </div>
+
+  <script>
+    function openFolder(folderPath) {
+      window.location.href = `/library?folder=${encodeURIComponent(folderPath)}`;
+    }
+
+    function openFile(filePath, fileType, fileName) {
+      if (fileType === '.txt') {
+        // Show text content viewer and load text inline
+        document.getElementById('fileContent').style.display = 'block';
+        loadTextFile(filePath);
+      } else if (['.cbz', '.zip'].includes(fileType)) {
+        // Navigate to reader page for ZIP/CBZ files
+        const readerUrl = `/reader?file=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}`;
+        window.location.href = readerUrl;
+      } else if (fileType === '.webm') {
+        // Open video files in custom player
+        window.location.href = '/player?file=' + encodeURIComponent(filePath) + '&name=' + encodeURIComponent(fileName);
+      } else {
+        // Open other media in new tab
+        window.open('/file/' + encodeURIComponent(filePath), '_blank');
+      }
+    }
+
+    async function loadTextFile(filePath) {
+      const contentDiv = document.getElementById('fileContent');
+      
+      try {
+        contentDiv.innerHTML = '<div style="text-align: center; color: #666;">Loading...</div>';
+        
+        const res = await fetch('/file/' + encodeURIComponent(filePath));
+        if (!res.ok) throw new Error('Failed to load file');
+        
+        const text = await res.text();
+        contentDiv.innerHTML = `
+          <div style="margin-bottom: 10px;">
+            <strong>Text File Preview:</strong>
+            <button onclick="document.getElementById('fileContent').style.display='none'" style="float: right; background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Close</button>
+          </div>
+          <pre style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; background: white; padding: 15px; border-radius: 5px;">${escapeHtml(text)}</pre>
+        `;
+      } catch (err) {
+        contentDiv.innerHTML = `
+          <div style="margin-bottom: 10px;">
+            <strong>Error:</strong>
+            <button onclick="document.getElementById('fileContent').style.display='none'" style="float: right; background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Close</button>
+          </div>
+          <div style="color: #d32f2f;">Failed to load file: ${escapeHtml(err.message)}</div>
+        `;
+        console.error(err);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Keyboard navigation for going back
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const textViewer = document.getElementById('fileContent');
+        if (textViewer.style.display !== 'none') {
+          textViewer.style.display = 'none';
+        }
+      }
+    });
+  </script>
+  <div class="version-id"><%= version %></div>
+</body>
+</html>

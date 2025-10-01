@@ -1,0 +1,7 @@
+simple tools usually to make the file handling work.
+
+traditionally you need the chapters named chapter 1 chapter 2 
+etc
+
+i have handing for different types but it does break the continue reading system so im adding this as a stopgap
+

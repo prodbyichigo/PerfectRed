@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PerfectRed</title>
+  <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+  <style>
+    /* Example: position video in the center of the page */
+    #myVideo {
+      position: absolute; /* or fixed if you want it to stay on scroll */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%); /* center exactly */
+      width: 640px;  /* adjust size */
+      height: 360px;
+      border: 2px solid #000; /* optional border */
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    /* Example: make video responsive */
+    @media (max-width: 700px) {
+      #myVideo {
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/library">Library</a></li>
+      <li><a href="/settings">Settings</a></li>
+    </ul>
+  </nav>
+
+  <video id="myVideo" controls>
+    <source src="../manga/output.webm" type="video/webm">
+    Your browser does not support HTML5 video.
+  </video>
+
+</body>
+</html>

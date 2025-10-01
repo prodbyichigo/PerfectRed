@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PerfectRed</title>
+  <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+  <link rel="icon" href="data:image/png;base64,<%= faviconBase64 %>" type="image/png">
+  <style>
+    .continue-section { margin: 40px 20px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .section-title { font-size: 1.5em; font-weight: bold; color: #fff; }
+    .reading-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 15px; }
+    .reading-card { background:#222;color:#fff;border-radius:12px;padding:10px;position:relative;cursor:pointer;transition:transform 0.1s,box-shadow 0.1s; }
+    .reading-card:hover { transform:translateY(-3px); box-shadow:0 4px 12px rgba(0,0,0,0.5); }
+    .remove-btn { position:absolute; top:6px; right:6px; background:transparent; border:none; color:#f55; font-size:16px; cursor:pointer; z-index:10; }
+    .reading-card-title { margin-bottom:6px; }
+    .series-name { font-weight:bold; font-size:1em; }
+    .chapter-name { font-size:0.85em; color:#888; }
+    .reading-card-info { font-size:0.85em; margin-bottom:4px; }
+    .progress-bar { background:#555; height:6px; border-radius:3px; overflow:hidden; margin-bottom:6px; }
+    .progress-fill { background:#f55; height:100%; width:0%; }
+    .reading-card-time { font-size:0.75em; color:#aaa; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #888; }
+    .empty-state-icon { font-size: 3em; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/library">Library</a></li>
+      <li><a href="/settings">Settings</a></li>
+    </ul>
+  </nav>
+
+  <center><h1 style="margin-top: 50px;">PerfectRed</h1></center>
+
+  <!-- Continue Reading Section -->
+  <div class="continue-section">
+    <div class="section-header">
+      <div class="section-title">Continue Reading</div>
+    </div>
+    <div id="continueReadingContainer">
+      <div class="empty-state">
+        <div class="empty-state-icon">📚</div>
+        <p>No manga in progress</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="continue-section">
+    <div class="section-header">
+      <div class="section-title">Continue Watching</div>
+    </div>
+    <div id="continueWatchingContainer">
+      <div class="empty-state">
+        <div class="empty-state-icon">😳</div>
+        <p>No videos in progress</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="server-info">
+    <div class="server-info-label">Server Uptime</div>
+    <div id="server-uptime">Loading...</div>
+  </div>
+
+  <script>
+    // ============================================================
+    // VIDEO HISTORY CLASS
+    // ============================================================
+    class VideoHistory {
+      constructor() {
+        this.storageKey = 'perfectred_video_history';
+        this.maxItems = 20;
+      }
+
+      getHistory() {
+        try { return JSON.parse(localStorage.getItem(this.storageKey)) || []; }
+        catch(e){ console.error(e); return []; }
+      }
+
+      saveProgress(filePath, fileName, currentTime, duration) {
+        try {
+          let history = this.getHistory();
+          const idx = history.findIndex(i => i.filePath === filePath);
+          const progress = Math.round((currentTime / duration) * 100);
+
+          const item = {
+            filePath,
+            fileName,
+            currentTime,
+            duration,
+            lastWatched: new Date().toISOString(),
+            progress
+          };
+
+          if(idx >= 0) history[idx] = item;
+          else history.unshift(item);
+
+          history = history.slice(0, this.maxItems);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error(e); }
+      }
+
+      removeItem(filePath) {
+        try {
+          let history = this.getHistory();
+          history = history.filter(i => i.filePath !== filePath);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error(e); }
+      }
+
+      getTimeAgo(isoString) {
+        const date = new Date(isoString), now = new Date();
+        const seconds = Math.floor((now-date)/1000);
+        if(seconds < 60) return 'Just now';
+        if(seconds < 3600) return `${Math.floor(seconds/60)}m ago`;
+        if(seconds < 86400) return `${Math.floor(seconds/3600)}h ago`;
+        if(seconds < 604800) return `${Math.floor(seconds/86400)}d ago`;
+        return date.toLocaleDateString();
+      }
+
+      formatTime(seconds) {
+        if (isNaN(seconds)) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+    }
+
+    // ============================================================
+    // READING HISTORY CLASS
+    // ============================================================
+    class ReadingHistory {
+      constructor() {
+        this.storageKey = 'perfectred_reading_history';
+        this.maxItems = 10;
+      }
+
+      getHistory() {
+        try { return JSON.parse(localStorage.getItem(this.storageKey)) || []; } 
+        catch(e){ console.error(e); return []; }
+      }
+
+      saveProgress(filePath, fileName, currentPage, totalPages, fileType='cbz') {
+        try {
+          let history = this.getHistory();
+          const idx = history.findIndex(i => i.filePath === filePath);
+          const item = {
+            filePath, fileName, currentPage, totalPages, fileType,
+            lastRead: new Date().toISOString(),
+            progress: Math.round((currentPage/totalPages)*100)
+          };
+          if(idx>=0) history[idx]=item; else history.unshift(item);
+          history = history.slice(0,this.maxItems);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error(e); }
+      }
+
+      removeItem(filePath) {
+        try {
+          let history = this.getHistory();
+          history = history.filter(i => i.filePath !== filePath);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error(e); }
+      }
+
+      getTimeAgo(isoString){
+        const date = new Date(isoString), now=new Date();
+        const seconds = Math.floor((now-date)/1000);
+        if(seconds<60) return 'Just now';
+        if(seconds<3600) return `${Math.floor(seconds/60)}m ago`;
+        if(seconds<86400) return `${Math.floor(seconds/3600)}h ago`;
+        if(seconds<604800) return `${Math.floor(seconds/86400)}d ago`;
+        return date.toLocaleDateString();
+      }
+
+      parseSeriesInfo(fileName, filePath = null) {
+        const nameWithoutExt = fileName.replace(/\.(cbz|zip|epub|pdf)$/i, '');
+
+        const patterns = [
+          /^(.+?)\s*-\s*(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
+          /^(.+?)\s+(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
+          /^(.+?)\s*[\[\(](?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?[\]\)]$/i,
+          /^(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i
+        ];
+
+        for (let i = 0; i < patterns.length; i++) {
+          const pattern = patterns[i];
+          const match = nameWithoutExt.match(pattern);
+          
+          if (match) {
+            if (i === 3) {
+              const chapterNum = match[1].trim();
+              const subtitle = match[2] ? match[2].trim() : '';
+              
+              let seriesName = 'Unknown Series';
+              if (filePath) {
+                const pathParts = filePath.replace(/\\/g, '/').split('/');
+                const cleanParts = pathParts.filter(p => p && p !== fileName);
+                
+                if (cleanParts.length > 0) {
+                  seriesName = cleanParts[cleanParts.length - 1];
+                  if (seriesName === 'data' && cleanParts.length > 1) {
+                    seriesName = cleanParts[cleanParts.length - 2];
+                  }
+                }
+              }
+              
+              return {
+                series: seriesName,
+                chapter: parseFloat(chapterNum),
+                chapterStr: chapterNum,
+                suffix: subtitle,
+                display: `Ch. ${chapterNum}${subtitle ? ' - ' + subtitle : ''}`
+              };
+            } else {
+              const seriesName = match[1].trim();
+              const chapterNum = match[2].trim();
+              const suffix = match[3] ? match[3].trim() : '';
+              
+              return {
+                series: seriesName,
+                chapter: parseFloat(chapterNum),
+                chapterStr: chapterNum,
+                suffix: suffix,
+                display: `${seriesName} - Ch. ${chapterNum}${suffix ? ' - ' + suffix : ''}`
+              };
+            }
+          }
+        }
+
+        return {
+          series: nameWithoutExt,
+          chapter: null,
+          chapterStr: null,
+          suffix: '',
+          display: nameWithoutExt
+        };
+      }
+    }
+
+    // ============================================================
+    // INITIALIZE
+    // ============================================================
+    const videoHistory = new VideoHistory();
+    const readingHistory = new ReadingHistory();
+    window.videoHistory = videoHistory;
+    window.readingHistory = readingHistory;
+
+    // ============================================================
+    // DISPLAY VIDEO HISTORY
+    // ============================================================
+    function displayVideoHistory() {
+      const history = videoHistory.getHistory();
+      const container = document.getElementById('continueWatchingContainer');
+      const incomplete = history.filter(i => i.progress < 100);
+      
+      if (!incomplete.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">😳</div>
+            <p>No videos in progress</p>
+          </div>`;
+        return;
+      }
+
+      const cards = incomplete.map(item => {
+        const fileName = item.fileName.replace(/\.(webm|mp4|mkv)$/i, '');
+        return `
+          <div class="reading-card" onclick="continueWatching('${item.filePath}', ${item.currentTime})">
+            <button class="remove-btn" onclick="event.stopPropagation(); removeVideoHistory('${item.filePath}')">×</button>
+            <div class="reading-card-title">
+              <div class="series-name">${fileName}</div>
+            </div>
+            <div class="reading-card-info">${videoHistory.formatTime(item.currentTime)} / ${videoHistory.formatTime(item.duration)}</div>
+            <div class="reading-card-info">${item.progress}% complete</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
+            <div class="reading-card-time">${videoHistory.getTimeAgo(item.lastWatched)}</div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `<div class="reading-grid">${cards}</div>`;
+    }
+
+    function continueWatching(filePath, startTime) {
+      window.location.href = `/player?file=${encodeURIComponent(filePath)}&time=${startTime}`;
+    }
+
+    function removeVideoHistory(filePath) {
+      if(confirm('Remove this video from history?')) {
+        videoHistory.removeItem(filePath);
+        displayVideoHistory();
+      }
+    }
+
+    // ============================================================
+    // DISPLAY READING HISTORY
+    // ============================================================
+    function displayReadingHistory(){
+      const history = readingHistory.getHistory();
+      const container = document.getElementById('continueReadingContainer');
+      const incomplete = history.filter(i => i.progress < 100);
+      
+      if(!incomplete.length){
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">😳</div>
+            <p>No manga in progress</p>
+          </div>`;
+        return;
+      }
+
+      const seriesMap = new Map();
+      
+      incomplete.forEach(item => {
+        const info = readingHistory.parseSeriesInfo(item.fileName, item.filePath);
+        const seriesKey = info.series;
+        
+        if (!seriesMap.has(seriesKey)) {
+          seriesMap.set(seriesKey, { item, info });
+        } else {
+          const existing = seriesMap.get(seriesKey);
+          if (new Date(item.lastRead) > new Date(existing.item.lastRead)) {
+            seriesMap.set(seriesKey, { item, info });
+          }
+        }
+      });
+
+      const uniqueItems = Array.from(seriesMap.values())
+        .sort((a, b) => new Date(b.item.lastRead) - new Date(a.item.lastRead));
+
+      const cards = uniqueItems.map(({item, info})=>{
+        return `<div class="reading-card" onclick="continueReading('${item.filePath}','${encodeURIComponent(item.fileName)}',${item.currentPage})">
+          <button class="remove-btn" onclick="event.stopPropagation(); removeHistoryItem('${item.filePath}')">×</button>
+          <div class="reading-card-title" title="${info.display}">
+            <div class="series-name">${info.series}</div>
+            ${info.chapterStr ? `<div class="chapter-name">Ch. ${info.chapterStr}${info.suffix ? ' - ' + info.suffix : ''}</div>` : ''}
+          </div>
+          <div class="reading-card-info">Page ${item.currentPage} of ${item.totalPages}</div>
+          <div class="reading-card-info">${item.progress}% complete</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
+          <div class="reading-card-time">${readingHistory.getTimeAgo(item.lastRead)}</div>
+        </div>`;
+      }).join('');
+
+      container.innerHTML = `<div class="reading-grid">${cards}</div>`;
+    }
+
+    function continueReading(filePath,fileName,startPage){
+      window.location.href=`/reader?file=${encodeURIComponent(filePath)}&name=${fileName}&page=${startPage}`;
+    }
+
+    function removeHistoryItem(filePath){
+      if(confirm('Remove this item from history?')){
+        readingHistory.removeItem(filePath);
+        displayReadingHistory();
+      }
+    }
+
+    // ============================================================
+    // UPTIME
+    // ============================================================
+    function updateUptime(){
+      fetch('/api/uptime')
+        .then(res=>res.json())
+        .then(data=>{
+          const el=document.getElementById('server-uptime');
+          if(el){
+            const parts=[];
+            if(data.days>0) parts.push(`${data.days}d`);
+            if(data.hours>0) parts.push(`${data.hours}h`);
+            if(data.minutes>0) parts.push(`${data.minutes}m`);
+            parts.push(`${data.seconds}s`);
+            el.textContent = parts.join(' ');
+          }
+        }).catch(err=>console.error('Error fetching uptime:',err));
+    }
+
+    // ============================================================
+    // INIT ON PAGE LOAD
+    // ============================================================
+    displayVideoHistory();
+    displayReadingHistory();
+    updateUptime();
+    setInterval(updateUptime, 1000);
+  </script>
+  <div class="version-id"><%= version %></div>
+</body>
+</html>

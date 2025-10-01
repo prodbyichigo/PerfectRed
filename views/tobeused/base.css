@@ -1,0 +1,21 @@
+/* base.css */
+@font-face {
+  font-family: '0xProtoNerdFontMono';
+  src: url('/font/0xProtoNerdFontMono-Regular.ttf') format('truetype');
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Shared component styles, using variables */
+nav a {
+  color: var(--color-text);
+}
+nav a:hover {
+  background-color: var(--color-nav-hover);
+}
+
+/* etc… */

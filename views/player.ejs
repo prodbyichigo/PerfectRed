@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player - PerfectRed</title>
+  <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+  <link rel="icon" href="data:image/png;base64,<%= faviconBase64 %>" type="image/png">
+  <style>
+    body { margin: 0; padding: 0; background: #000; }
+    #player-container { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="player-container"></div>
+  
+  <script>
+    // VideoHistory class
+    class VideoHistory {
+      constructor() {
+        this.storageKey = 'perfectred_video_history';
+        this.maxItems = 20;
+      }
+
+      getHistory() {
+        try { return JSON.parse(localStorage.getItem(this.storageKey)) || []; }
+        catch(e){ console.error(e); return []; }
+      }
+
+      saveProgress(filePath, fileName, currentTime, duration) {
+        try {
+          let history = this.getHistory();
+          const idx = history.findIndex(i => i.filePath === filePath);
+          const progress = Math.round((currentTime / duration) * 100);
+
+          const item = {
+            filePath,
+            fileName,
+            currentTime,
+            duration,
+            lastWatched: new Date().toISOString(),
+            progress
+          };
+
+          if(idx >= 0) history[idx] = item;
+          else history.unshift(item);
+
+          history = history.slice(0, this.maxItems);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error('Error saving video progress:', e); }
+      }
+
+      removeItem(filePath) {
+        try {
+          let history = this.getHistory();
+          history = history.filter(i => i.filePath !== filePath);
+          localStorage.setItem(this.storageKey, JSON.stringify(history));
+        } catch(e){ console.error(e); }
+      }
+
+      parseVideoInfo(fileName, filePath = null) {
+        const nameWithoutExt = fileName.replace(/\.(webm|mp4|mkv|avi)$/i, '');
+
+        const patterns = [
+          // "Series - Episode 7 - Subtitle" or "Series - Episode 7"
+          /^(.+?)\s*-\s*(?:Episode|Ep\.?|E)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
+          // "Series Episode 7 - Subtitle" or "Series Episode 7"
+          /^(.+?)\s+(?:Episode|Ep\.?|E)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
+          // "[Episode 7 - Subtitle]" or "(Episode 7)"
+          /^(.+?)\s*[\[\(](?:Episode|Ep\.?|E)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?[\]\)]$/i,
+          // "Episode 7 - Subtitle" (episode-first format)
+          /^(?:Episode|Ep\.?|E)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i
+        ];
+
+        for (let i = 0; i < patterns.length; i++) {
+          const pattern = patterns[i];
+          const match = nameWithoutExt.match(pattern);
+          
+          if (match) {
+            // Handle episode-first format differently
+            if (i === 3) {
+              const episodeNum = match[1].trim();
+              const subtitle = match[2] ? match[2].trim() : '';
+              
+              // Extract series name from folder path
+              let seriesName = 'Unknown Series';
+              if (filePath) {
+                const pathParts = filePath.replace(/\\/g, '/').split('/');
+                const cleanParts = pathParts.filter(p => p && p !== fileName);
+                
+                if (cleanParts.length > 0) {
+                  seriesName = cleanParts[cleanParts.length - 1];
+                  if (seriesName === 'data' && cleanParts.length > 1) {
+                    seriesName = cleanParts[cleanParts.length - 2];
+                  }
+                }
+              }
+              
+              return {
+                series: seriesName,
+                episode: parseFloat(episodeNum),
+                episodeStr: episodeNum,
+                subtitle: subtitle
+              };
+            } else {
+              // Handle series-first formats
+              const seriesName = match[1].trim();
+              const episodeNum = match[2].trim();
+              const subtitle = match[3] ? match[3].trim() : '';
+              
+              return {
+                series: seriesName,
+                episode: parseFloat(episodeNum),
+                episodeStr: episodeNum,
+                subtitle: subtitle
+              };
+            }
+          }
+        }
+
+        // Fallback - try to extract series from folder
+        let seriesName = nameWithoutExt;
+        if (filePath) {
+          const pathParts = filePath.replace(/\\/g, '/').split('/');
+          const cleanParts = pathParts.filter(p => p && p !== fileName);
+          if (cleanParts.length > 0) {
+            seriesName = cleanParts[cleanParts.length - 1];
+            if (seriesName === 'data' && cleanParts.length > 1) {
+              seriesName = cleanParts[cleanParts.length - 2];
+            }
+          }
+        }
+
+        return {
+          series: seriesName,
+          episode: null,
+          episodeStr: null,
+          subtitle: nameWithoutExt
+        };
+      }
+    }
+
+    // Initialize videoHistory globally
+    window.videoHistory = new VideoHistory();
+  </script>
+  
+  <script src="/player.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const filePath = urlParams.get('file');
+    const fileName = urlParams.get('name');
+    const startTime = parseFloat(urlParams.get('time')) || 0;
+    
+    if (!filePath) {
+      document.body.innerHTML = '<h1 style="color:white;text-align:center;padding:50px;">No video file specified</h1>';
+    } else {
+      const player = new VideoPlayer('player-container', {
+        src: '/file/' + encodeURIComponent(filePath),
+        autoplay: true,
+        controls: true
+      });
+      
+      // Override the save progress to use the correct fileName
+      const originalTimeUpdate = player.video.ontimeupdate;
+      player.video.addEventListener('timeupdate', () => {
+        if (window.videoHistory && fileName) {
+          window.videoHistory.saveProgress(
+            filePath,
+            fileName,
+            player.video.currentTime,
+            player.video.duration
+          );
+        }
+      });
+      
+      // Set start time when metadata loads
+      player.video.addEventListener('loadedmetadata', () => {
+        if (startTime > 0) {
+          player.video.currentTime = startTime;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
