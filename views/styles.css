@@ -14,9 +14,9 @@
 
 body {
     font-family: '0xProtoNerdFontMono', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #1a1a1a;
+    background: #000000;
     color: #fff;
-    overflow-x: hidden;
+    overflow: hidden;
     padding-left: 5px;
     padding-right: 5px;
     color: red;
@@ -190,20 +190,55 @@ nav a:hover {
   color: #999;
   margin-top: 8px;
 }
-
 .progress-bar {
   width: 100%;
-  height: 6px;
-  background: #222;
-  border-radius: 3px;
+  height: 8px;
+  background: #111;
+  border-radius: 4px;
   overflow: hidden;
   margin-top: 10px;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ff0000, #ff4444);
-  transition: width 0.3s;
+  width: 0; /* controlled by JS or inline style */
+  background: linear-gradient(90deg, #ff00ff, #ff0088, #ff44aa);
+  transition: width 0.3s ease-out;
+  box-shadow:
+    0 0 10px #ff00ff,
+    0 0 20px #ff00ff,
+    0 0 30px #ff0088,
+    0 0 40px #ff44aa;
+  filter: blur(1px); /* softens the glow */
+}
+
+/* Neon pulse animation */
+@keyframes neonPulse {
+  0% {
+    box-shadow:
+      0 0 10px #ff00ff,
+      0 0 20px #ff00ff,
+      0 0 30px #ff0088,
+      0 0 40px #ff44aa;
+  }
+  50% {
+    box-shadow:
+      0 0 25px #ff00ff,
+      0 0 50px #ff00ff,
+      0 0 75px #ff0088,
+      0 0 100px #ff44aa;
+  }
+  100% {
+    box-shadow:
+      0 0 10px #ff00ff,
+      0 0 20px #ff00ff,
+      0 0 30px #ff0088,
+      0 0 40px #ff44aa;
+  }
+}
+
+.progress-fill.glow {
+  animation: neonPulse 1.2s infinite ease-in-out;
 }
 
 .remove-btn {
@@ -398,6 +433,11 @@ nav a:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.red-number {
+  color: #ffffff; /* bright red */
+  font-weight: bold; /* optional for emphasis */
 }
 
 .page-counter {
@@ -600,7 +640,7 @@ nav a:hover {
 /* ===== MOBILE OPTIMIZATIONS ===== */
 @media (max-width: 768px) {
   nav a { 
-    padding: 8px 10px; 
+    padding: 20px 2px; 
     font-size: 14px; 
   }
 
@@ -701,4 +741,250 @@ nav a:hover {
 
 .groupbox-content {
   margin-top: 10px;
+}
+
+.login-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+
+.login-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.login-title {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 1.8rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #fff 0%, #e0e0e0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.login-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.login-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #b0b0b0;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+
+}
+
+.login-form input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  /* box-shadow: 0 0 10px 2px white; */
+  box-shadow: inset 0 0 3px rgb(255, 255, 255);
+
+}
+
+.login-form input:focus {
+  border-color: #ff0000;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
+  transform: translateY(-1px);
+}
+
+.login-form input::placeholder {
+  color: #666;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #ff4444 0%, #e63939 100%);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-login::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-login:hover {
+  background: linear-gradient(135deg, #ff5555 0%, #ff3333 100%);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-login:hover::before {
+  left: 100%;
+}
+
+.btn-login:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
+}
+
+.register-link {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #999;
+}
+
+.register-link a {
+  color: #ff4444;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.register-link a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: #ff4444;
+  transition: width 0.3s ease;
+}
+
+.register-link a:hover {
+  color: #ff5555;
+}
+
+.register-link a:hover::after {
+  width: 100%;
+}
+
+/* Auth form styles for register page */
+.auth-form {
+  background: linear-gradient(145deg, #1e1e1e 0%, #252525 100%);
+  padding: 2.5rem;
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  max-width: 380px;
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.auth-form > div {
+  margin-bottom: 1.5rem;
+}
+
+.auth-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #b0b0b0;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.auth-form input:focus {
+  border-color: #ff4444;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
+  transform: translateY(-1px);
+}
+
+.auth-form input::placeholder {
+  color: #666;
+}
+
+.auth-form button[type="submit"] {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #ff4444 0%, #e63939 100%);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-form button[type="submit"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent);
+  transition: left 0.5s ease;
+}
+
+.auth-form button[type="submit"]:hover {
+  background: linear-gradient(135deg, #ff5555 0%, #ff3333 100%);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.4);
+  transform: translateY(-2px);
+}
+
+.auth-form button[type="submit"]:hover::before {
+  left: 100%;
+}
+
+.auth-form button[type="submit"]:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
 }

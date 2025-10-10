@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PerfectRed - Register</title>
+  <style>
+    .title-wrapper {
+      display: inline-block;
+      min-width: 280px;
+    }
+
+    .cycling-text {
+      color: #dc2626;
+      font-weight: bold;
+      display: inline-block;
+      min-width: 150px;
+      text-align: left;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1>
+      <span class="title-wrapper">
+        Perfect<span class="cycling-text" id="cyclingText">Red</span>
+      </span>
+    </h1>
+
+    <form action="/register" method="POST" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          placeholder="Enter a username" 
+          required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          placeholder="Enter a password" 
+          required>
+      </div>
+
+      <button type="submit" class="btn-login">Register</button>
+    </form>
+
+    <p class="register-link">
+      Already have an account? <a href="/login">Login here</a>
+    </p>
+  </div>
+
+  <script>
+    const words = ['[MangaReader]', '[AnimePlayer]', '[Interface]', 'Red'];
+    let currentIndex = 0;
+    const cyclingElement = document.getElementById('cyclingText');
+
+    function cycleWords() {
+      cyclingElement.style.opacity = '0';
+      
+      setTimeout(() => {
+        currentIndex = (currentIndex + 1) % words.length;
+        cyclingElement.textContent = words[currentIndex];
+        cyclingElement.style.opacity = '1';
+      }, 300);
+    }
+
+    cyclingElement.style.transition = 'opacity 0.3s ease-in-out';
+    setInterval(cycleWords, 2000);
+  </script>
+</body>
+</html>

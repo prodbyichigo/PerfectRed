@@ -3,43 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PerfectRed</title>
+  <title>PerfectRed - Settings</title>
+  <link rel="icon" href="data:image/png;base64,<%= faviconBase64 %>" type="image/png">
   <link rel="stylesheet" href="/styles.css?v=<%= version %>">
   <style>
-    /* Example: position video in the center of the page */
-    #myVideo {
-      position: absolute; /* or fixed if you want it to stay on scroll */
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%); /* center exactly */
-      width: 640px;  /* adjust size */
-      height: 360px;
-      border: 2px solid #000; /* optional border */
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    .settings-container {
+      max-width: 600px;
+      margin: 80px auto 40px;
+      padding: 20px;
     }
 
-    /* Example: make video responsive */
-    @media (max-width: 700px) {
-      #myVideo {
-        width: 100%;
-        height: auto;
+    .settings-section {
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .settings-section h2 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: var(--text);
+      font-size: 1.3rem;
+    }
+
+    .settings-section p {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .theme-selector {
+      display: flex;
+      gap: 15px;
+      margin-top: 16px;
+    }
+
+    .theme-option {
+      flex: 1;
+      padding: 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+      border: 3px solid transparent;
+      position: relative;
+    }
+
+    .theme-option.red {
+      background: linear-gradient(135deg, #ff0000 0%, #ff4444 100%);
+    }
+
+    .theme-option.blue {
+      background: linear-gradient(135deg, #0066ff 0%, #3385ff 100%);
+    }
+
+    .theme-option:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .theme-option.active {
+      border-color: white;
+      box-shadow: 0 0 0 2px var(--bg), 0 0 20px currentColor;
+    }
+
+    .theme-option-name {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+      color: white;
+    }
+
+    .theme-option-desc {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .checkmark {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .theme-option.active .checkmark {
+      opacity: 1;
+    }
+
+    .checkmark::after {
+      content: '✓';
+      color: #000;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .logout-btn {
+      background: linear-gradient(135deg, #ff4444 0%, #e63939 100%);
+      color: white;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+    }
+
+    .logout-btn:hover {
+      background: linear-gradient(135deg, #ff5555 0%, #ff3333 100%);
+      box-shadow: 0 6px 20px rgba(255, 68, 68, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .logout-btn:active {
+      transform: translateY(0);
+    }
+
+    .version-info {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 40px;
+    }
+
+    .theme-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+    }
+
+    .preview-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    @media (max-width: 768px) {
+      .theme-selector {
+        flex-direction: column;
       }
     }
   </style>
 </head>
 <body>
   <nav>
-    <ul>
+      <ul>
       <li><a href="/">Home</a></li>
       <li><a href="/library">Library</a></li>
+      <li><a href="/statistics">Statistics</a></li>
+      <li><a href="/webscrape">MangaDex</a></li>
       <li><a href="/settings">Settings</a></li>
-    </ul>
+      </ul>
   </nav>
 
-  <video id="myVideo" controls>
-    <source src="../manga/output.webm" type="video/webm">
-    Your browser does not support HTML5 video.
-  </video>
+  <div class="settings-container">
+    <center><h1>Settings</h1></center>
+    <div class="settings-section">
+      <h2>Account</h2>
+      <p>Manage your account settings and preferences.</p>
+      
+      <form action="/logout" method="POST" style="display: inline;">
+        <button type="submit" class="logout-btn">Logout</button>
+      </form>
+    </div>
 
+    <div class="version-id"><%= version %></div>
+  </div>
 </body>
 </html>

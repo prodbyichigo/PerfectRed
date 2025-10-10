@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PerfectRed - Statistics</title>
+    <link rel="stylesheet" href="/styles.css?v=<%= version %>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            color: #f55;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 50px;
+        }
+
+        .stat-card {
+            background: #222;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #f55;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 1.1em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-section {
+            background: #222;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .chart-section h2 {
+            color: #f55;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+            text-align: center;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #f55;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #f55;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .version-id {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/library">Library</a></li>
+            <li><a href="/statistics">Statistics</a></li>
+            <li><a href="/webscrape">MangaDex</a></li>
+            <li><a href="/settings">Settings</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1>Statistics</h1>
+
+        <div id="statsContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading your statistics...</p>
+            </div>
+        </div>
+
+        <div id="chartsContainer" style="display: none;">
+            <div class="chart-section">
+                <h2>Pages Read Per Manga</h2>
+                <div class="chart-container">
+                    <canvas id="pagesChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <h2>Time Spent Per Manga</h2>
+                <div class="chart-container">
+                    <canvas id="timeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="version-id" id="version">v0.0.2B</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script>
+        let pagesChart = null;
+        let timeChart = null;
+
+        async function apiRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return null;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (err) {
+                console.error('API request failed:', err);
+                throw err;
+            }
+        }
+
+        function formatReadingTime(minutes) {
+            if (minutes < 60) {
+                return `${minutes} min`;
+            }
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            if (hours < 24) {
+                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+            }
+            const days = Math.floor(hours / 24);
+            const remainingHours = hours % 24;
+            return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+        }
+
+        function calculateReadingSpeed(totalPages, totalMinutes) {
+            if (totalMinutes === 0) return 0;
+            const hours = totalMinutes / 60;
+            return Math.round(totalPages / hours);
+        }
+
+        function createChart(canvasId, label, data, labels, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            return new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: color,
+                        borderColor: color,
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        hoverBackgroundColor: '#ff6666'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#333',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#f55',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    if (canvasId === 'timeChart') {
+                                        return formatReadingTime(context.parsed.y);
+                                    }
+                                    return context.parsed.y + ' pages';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: '#333'
+                            },
+                            ticks: {
+                                color: '#aaa',
+                                callback: function(value) {
+                                    if (canvasId === 'timeChart') {
+                                        return formatReadingTime(value);
+                                    }
+                                    return value;
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#aaa',
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadStatistics() {
+            const container = document.getElementById('statsContainer');
+            const chartsContainer = document.getElementById('chartsContainer');
+            
+            try {
+                const data = await apiRequest('/api/statistics');
+                
+                if (!data || !data.success) {
+                    throw new Error('Failed to load statistics');
+                }
+
+                const stats = data.statistics;
+
+                if (!stats || (stats.minutes_spent_reading === 0 && stats.pages_read === 0)) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div style="font-size: 4em; margin-bottom: 20px;">📊</div>
+                            <h2>No Statistics Yet</h2>
+                            <p>Start reading to see your statistics here!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const readingSpeed = calculateReadingSpeed(stats.pages_read, stats.minutes_spent_reading);
+
+                container.innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${formatReadingTime(stats.minutes_spent_reading)}</div>
+                            <div class="stat-label">Time Spent Reading</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.pages_read.toLocaleString()}</div>
+                            <div class="stat-label">Pages Read</div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-value">${readingSpeed}</div>
+                            <div class="stat-label">Pages Per Hour</div>
+                        </div>
+                    </div>
+                `;
+
+                // Load manga-specific statistics
+                const mangaData = await apiRequest('/api/statistics/manga');
+                
+                if (mangaData && mangaData.success && mangaData.manga && mangaData.manga.length > 0) {
+                    chartsContainer.style.display = 'block';
+                    
+                    // Sort by pages read (descending) and take top 10
+                    const sortedManga = mangaData.manga
+                        .sort((a, b) => b.pages_read - a.pages_read)
+                        .slice(0, 10);
+                    
+                    const labels = sortedManga.map(m => {
+                        const name = m.file_name || 'Unknown';
+                        return name.length > 30 ? name.substring(0, 30) + '...' : name;
+                    });
+                    const pagesData = sortedManga.map(m => m.pages_read);
+                    const timeData = sortedManga.map(m => m.minutes_spent);
+
+                    // Destroy existing charts if they exist
+                    if (pagesChart) pagesChart.destroy();
+                    if (timeChart) timeChart.destroy();
+
+                    // Create new charts
+                    pagesChart = createChart('pagesChart', 'Pages Read', pagesData, labels, '#f55');
+                    timeChart = createChart('timeChart', 'Time Spent (minutes)', timeData, labels, '#5f5');
+                }
+
+            } catch (err) {
+                console.error('Failed to load statistics:', err);
+                container.innerHTML = `
+                    <div class="error-state">
+                        <div style="font-size: 4em; margin-bottom: 20px;">⚠️</div>
+                        <h2>Error Loading Statistics</h2>
+                        <p>${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        loadStatistics();
+    </script>
+</body>
+</html>

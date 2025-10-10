@@ -6,6 +6,23 @@
   <title>PerfectRed</title>
   <link rel="stylesheet" href="/styles.css?v=<%= version %>">
   <link rel="icon" href="data:image/png;base64,<%= faviconBase64 %>" type="image/png">
+  <style>
+    .breadcrumb a {
+      color: rgb(255, 0, 0);
+      text-decoration: none;
+    }
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+    .breadcrumb span {
+      color: #888;
+      margin: 0 8px;
+    }
+    .breadcrumb .current-folder {
+      color: #ff0000;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
   <div class="version-id" id="version"></div>
@@ -16,20 +33,31 @@
         document.getElementById("version").textContent = "v" + data.version;
       });
   </script>
-
-  <!-- Navbar -->
   <nav>
-    <ul>
+      <ul>
       <li><a href="/">Home</a></li>
       <li><a href="/library">Library</a></li>
+      <li><a href="/statistics">Statistics</a></li>
+      <li><a href="/webscrape">MangaDex</a></li>
       <li><a href="/settings">Settings</a></li>
-    </ul>
+      </ul>
   </nav>
 
   <div class="container">
+    <% 
+      // Get the current folder name for display
+      var currentFolderName = '';
+      if (breadcrumbs.length > 0) {
+        currentFolderName = breadcrumbs[breadcrumbs.length - 1].name;
+      }
+    %>
+    
+    <center><h1 style="margin-top: 30px; margin-bottom: 30px;">
+      <%= currentFolderName || 'Library' %>
+    </h1></center>
+    
     <div class="breadcrumb">
-      <center><h1 style="margin-top: 30px; margin-bottom: 30px;">Library</h1></center>
-      <a href="/library" style="margin-left: 10px; color: red;">Home</a>
+      <a href="/library" style="margin-left: 10px;">Home</a>
       <% if (breadcrumbs.length > 0) { %>
         <% breadcrumbs.forEach((crumb, index) => { %>
           <span>›</span>
@@ -77,12 +105,27 @@
       <% 
         var videoFiles = files.filter(function(f) { return f.type === '.webm'; });
         var novelFiles = files.filter(function(f) { return ['.txt', '.epub', '.pdf'].includes(f.type); });
-        var otherFiles = files.filter(function(f) { return !['.webm', '.txt', '.epub', '.pdf'].includes(f.type); });
+        var mangaFiles = files.filter(function(f) { return ['.cbz', '.zip'].includes(f.type); });
+        var imageFiles = files.filter(function(f) { return ['.jpg','.jpeg','.png','.gif'].includes(f.type); });
       %>
+      
+      <!-- Manga Chapters (if in a manga folder) -->
+      <% if (mangaFiles.length > 0) { %>
+        <div class="grid" style="margin-left: 10px;">
+          <% mangaFiles.forEach(function(file) { %>
+            <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
+              <div class="file-icon">
+                <img src="data:image/png;base64,<%= faviconBase64 %>" class="file-icon-img" alt="Manga">
+              </div>
+              <strong class="file-name"><%= file.name %></strong>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
       
       <!-- Videos -->
       <% if (videoFiles.length > 0) { %>
-        <h2 style="margin-left: 10px; margin-top: 30px;">Videos</h2>
+        <h2 style="margin-left: 10px; margin-top: 30px;">Episodes</h2>
         <div class="grid" style="margin-left: 10px;">
           <% videoFiles.forEach(function(file) { %>
             <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
@@ -113,22 +156,13 @@
         </div>
       <% } %>
       
-      <!-- Other Files -->
-      <% if (otherFiles.length > 0) { %>
-        <h2 style="margin-left: 10px; margin-top: 30px;">Other Files</h2>
+      <!-- Images -->
+      <% if (imageFiles.length > 0) { %>
+        <h2 style="margin-left: 10px; margin-top: 30px;">Images</h2>
         <div class="grid" style="margin-left: 10px;">
-          <% otherFiles.forEach(function(file) { %>
+          <% imageFiles.forEach(function(file) { %>
             <div class="tile" onclick="openFile('<%= file.path %>', '<%= file.type %>', '<%= file.name %>')">
-              <div class="file-icon">
-                <% if (['.cbz', '.zip'].includes(file.type)) { %>
-                  <img src="data:image/png;base64,<%= faviconBase64 %>" class="file-icon-img" alt="Archive">
-                <% } else if (['.jpg','.jpeg','.png','.gif'].includes(file.type)) { %>
-                  <!-- You can put an icon or leave it empty -->
-                  🖼️
-                <% } else { %>
-                  ❓
-                <% } %>
-              </div>
+              <div class="file-icon">🖼️</div>
               <strong class="file-name"><%= file.name %></strong>
             </div>
           <% }) %>
@@ -158,18 +192,14 @@
 
     function openFile(filePath, fileType, fileName) {
       if (fileType === '.txt') {
-        // Show text content viewer and load text inline
         document.getElementById('fileContent').style.display = 'block';
         loadTextFile(filePath);
       } else if (['.cbz', '.zip'].includes(fileType)) {
-        // Navigate to reader page for ZIP/CBZ files
         const readerUrl = `/reader?file=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName)}`;
         window.location.href = readerUrl;
       } else if (fileType === '.webm') {
-        // Open video files in custom player
-        window.location.href = '/player?file=' + encodeURIComponent(filePath) + '&name=' + encodeURIComponent(fileName);
+        window.location.href = '/watcher?file=' + encodeURIComponent(filePath) + '&name=' + encodeURIComponent(fileName);
       } else {
-        // Open other media in new tab
         window.open('/file/' + encodeURIComponent(filePath), '_blank');
       }
     }
@@ -209,7 +239,6 @@
       return div.innerHTML;
     }
 
-    // Keyboard navigation for going back
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         const textViewer = document.getElementById('fileContent');

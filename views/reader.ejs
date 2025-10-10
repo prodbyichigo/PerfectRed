@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/styles.css?v=<%= version %>">
 </head>
 <body>
+  
   <!-- Header -->
   <header class="reader-header" id="header">
     <div class="header-content">
@@ -25,13 +26,11 @@
     </div>
   </div>
 
-  <!-- Navigation Areas (Desktop only) -->
+  <!-- Navigation Areas -->
   <div class="nav-area nav-left" id="navLeft" onclick="previousPage()">
     <div class="nav-icon">‹</div>
   </div>
-  
   <div class="nav-area nav-center" id="navCenter" onclick="toggleControls()"></div>
-  
   <div class="nav-area nav-right" id="navRight" onclick="nextPage()">
     <div class="nav-icon">›</div>
   </div>
@@ -59,325 +58,339 @@
     </div>
   </div>
 
-  <!-- Next Chapter Prompt -->
-  <div id="nextChapterPrompt" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 30px; border-radius: 10px; z-index: 10000; text-align: center; color: white;">
-    <h2 style="margin-bottom: 20px;">Chapter Complete!</h2>
-    <p id="nextChapterInfo" style="margin-bottom: 20px;"></p>
-    <button onclick="loadNextChapter()" style="background: #e74c3c; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-right: 10px;">Load Next Chapter</button>
-    <button onclick="closeNextChapterPrompt()" style="background: #555; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px;">Stay Here</button>
+  <!-- Loading Next Chapter Overlay -->
+  <div id="nextChapterOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner" style="margin: 0 auto 20px;"></div>
+      <h2 style="margin-bottom: 10px;">Loading Next Chapter</h2>
+      <p id="nextChapterName" style="color: #ccc;"></p>
+    </div>
   </div>
 
-  <!-- Include JSZip library -->
+  <!-- Include JSZip -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  
+
   <script>
+    // ========= Global Variables =========
     let currentImages = [];
     let currentPage = 0;
     let isControlsVisible = false;
     let touchStartX = 0;
     let touchStartY = 0;
     let isMobile = window.innerWidth <= 768;
+
     let nextChapterPath = null;
+    let isLoadingNextChapter = false;
+    let filePath = '';
+    let fileName = '';
+    let seriesInfo = {};
+    let isMangaDex = false;
 
-    // Reading History Class
-    class ReadingHistory {
-      constructor() {
-        this.storageKey = 'perfectred_reading_history';
-        this.maxItems = 10;
+    // ========= Utility Functions =========
+    function normalizeSeries(name) {
+      if (!name) return '';
+      return name.toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function extractSeriesFromPath(path) {
+      // If path contains a folder, use the folder name as the series
+      // e.g., "One Piece/Chapter 5.cbz" -> series is "One Piece"
+      const parts = path.split('/');
+      if (parts.length > 1) {
+        return parts[0]; // Return the folder name
       }
+      return null;
+    }
 
-      saveProgress(filePath, fileName, currentPage, totalPages, fileType = 'cbz') {
-        try {
-          let history = this.getHistory();
-          const existingIndex = history.findIndex(item => item.filePath === filePath);
-
-          const item = {
-            filePath,
-            fileName,
-            currentPage,
-            totalPages,
-            fileType,
-            lastRead: new Date().toISOString(),
-            progress: Math.round((currentPage / totalPages) * 100)
-          };
-
-          if (existingIndex >= 0) {
-            history[existingIndex] = item;
-          } else {
-            history.unshift(item);
+    // ========= API Helper =========
+    async function apiRequest(url, options = {}) {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...options.headers }
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            window.location.href = '/login';
+            return null;
           }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+      } catch (err) {
+        console.error('API request failed:', err);
+        throw err;
+      }
+    }
 
-          history = history.slice(0, this.maxItems);
-          localStorage.setItem(this.storageKey, JSON.stringify(history));
-          return true;
+    // ========= Reading History =========
+    class ReadingHistory {
+      async saveProgress(filePath, fileName, currentPage, totalPages, fileType = 'cbz') {
+        try {
+          const result = await apiRequest('/api/progress/reading', {
+            method: 'POST',
+            body: JSON.stringify({ filePath, fileName, currentPage, totalPages, fileType })
+          });
+          return result?.success || false;
         } catch (e) {
           console.error('Error saving history:', e);
           return false;
         }
       }
 
-      getHistory() {
+      async getProgress(filePath) {
         try {
-          const data = localStorage.getItem(this.storageKey);
-          return data ? JSON.parse(data) : [];
+          const data = await apiRequest('/api/progress/reading');
+          if (data && data.success && data.progress) {
+            return data.progress.find(item => item.file_path === filePath);
+          }
+          return null;
         } catch (e) {
-          return [];
+          console.error('Error getting progress:', e);
+          return null;
         }
       }
 
-      getProgress(filePath) {
-        const history = this.getHistory();
-        return history.find(item => item.filePath === filePath);
-      }
-
-      parseSeriesInfo(fileName) {
+      parseSeriesInfo(filePathOrName) {
+        // Try to extract series from folder path first
+        const folderSeries = extractSeriesFromPath(filePathOrName);
+        
+        // Get just the filename for chapter parsing
+        const fileName = filePathOrName.split('/').pop();
         const nameWithoutExt = fileName.replace(/\.(cbz|zip|epub|pdf)$/i, '');
-
+        
         const patterns = [
-          // "Series - Chapter 7 - Subtitle" or "Series - Chapter 7"
           /^(.+?)\s*-\s*(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
-          // "Series Chapter 7 - Subtitle" or "Series Chapter 7"
           /^(.+?)\s+(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i,
-          // "[Chapter 7 - Subtitle]" or "(Chapter 7)"
           /^(.+?)\s*[\[\(](?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?[\]\)]$/i,
-          // "Chapter 185 - Stomach in Another World" (chapter-first format)
           /^(?:Chapter|Ch\.?|Episode|Ep\.?)\s*(\d+(?:\.\d+)?)(?:\s*-\s*(.*))?$/i
         ];
-
+        
         for (let i = 0; i < patterns.length; i++) {
-          const pattern = patterns[i];
-          const match = nameWithoutExt.match(pattern);
-          
+          const match = nameWithoutExt.match(patterns[i]);
           if (match) {
-            // Handle chapter-first format differently
             if (i === 3) {
+              // Pattern matches "Chapter X" without series name
               const chapterNum = match[1].trim();
               const subtitle = match[2] ? match[2].trim() : '';
-              
-              return {
-                series: subtitle || 'Unknown Series',
-                chapter: parseFloat(chapterNum),
-                chapterStr: chapterNum,
-                suffix: '',
-                display: `Ch. ${chapterNum}${subtitle ? ' - ' + subtitle : ''}`
+              // Use folder series if available, otherwise use subtitle or Unknown
+              const series = folderSeries || subtitle || 'Unknown Series';
+              return { 
+                series: series, 
+                chapter: parseFloat(chapterNum), 
+                chapterStr: chapterNum, 
+                suffix: '', 
+                display: `${series} - Ch. ${chapterNum}${subtitle ? ' - ' + subtitle : ''}` 
               };
             } else {
-              // Handle series-first formats
               const seriesName = match[1].trim();
               const chapterNum = match[2].trim();
               const suffix = match[3] ? match[3].trim() : '';
-              
-              return {
-                series: seriesName,
-                chapter: parseFloat(chapterNum),
-                chapterStr: chapterNum,
-                suffix: suffix,
-                display: `${seriesName} - Ch. ${chapterNum}${suffix ? ' - ' + suffix : ''}`
+              // Use folder series if available, otherwise use parsed series name
+              const series = folderSeries || seriesName;
+              return { 
+                series: series, 
+                chapter: parseFloat(chapterNum), 
+                chapterStr: chapterNum, 
+                suffix: suffix, 
+                display: `${series} - Ch. ${chapterNum}${suffix ? ' - ' + suffix : ''}` 
               };
             }
           }
         }
-
-        // Fallback: just grab any number
+        
         const numberMatch = nameWithoutExt.match(/(\d+(?:\.\d+)?)/);
         if (numberMatch) {
-          return {
-            series: nameWithoutExt.replace(numberMatch[0], '').trim(),
-            chapter: parseFloat(numberMatch[0]),
-            chapterStr: numberMatch[0],
-            suffix: '',
-            display: nameWithoutExt
+          const series = folderSeries || nameWithoutExt.replace(numberMatch[0], '').trim();
+          return { 
+            series: series, 
+            chapter: parseFloat(numberMatch[0]), 
+            chapterStr: numberMatch[0], 
+            suffix: '', 
+            display: folderSeries ? `${series} - ${nameWithoutExt}` : nameWithoutExt 
           };
         }
-
-        return {
-          series: nameWithoutExt,
-          chapter: null,
-          chapterStr: null,
-          suffix: '',
-          display: nameWithoutExt
+        
+        return { 
+          series: folderSeries || nameWithoutExt, 
+          chapter: null, 
+          chapterStr: null, 
+          suffix: '', 
+          display: folderSeries ? `${folderSeries} - ${nameWithoutExt}` : nameWithoutExt 
         };
       }
     }
 
     const readingHistory = new ReadingHistory();
 
-    // Get file path from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const filePath = urlParams.get('file');
-    const fileName = urlParams.get('name') || 'Unknown';
-    const startPage = parseInt(urlParams.get('page')) || 1;
+    // ========= Core Functions =========
 
-    // Parse and display series info
-    const seriesInfo = readingHistory.parseSeriesInfo(fileName);
-    document.getElementById('bookTitle').textContent = seriesInfo.display;
-
-    if (!filePath) {
-      showError('No file specified');
-    } else {
-      loadFile(filePath).then(() => {
-        findNextChapter();
-      });
-    }
-
-    window.addEventListener('resize', () => {
-      isMobile = window.innerWidth <= 768;
-    });
-
-    function saveProgress() {
+    async function saveProgress() {
       if (filePath && currentImages.length > 0) {
-        readingHistory.saveProgress(
-          filePath,
-          fileName,
-          currentPage + 1,
-          currentImages.length,
-          'cbz'
-        );
+        await readingHistory.saveProgress(filePath, fileName, currentPage + 1, currentImages.length, isMangaDex ? 'mangadex' : 'cbz');
       }
     }
 
-    // Find next chapter in the same folder
-    async function findNextChapter() {
-      if (seriesInfo.chapter === null) return;
-
+    async function loadMangaDexChapter(seriesId, chapter) {
       try {
-        const pathParts = filePath.split('/');
-        const folderPath = pathParts.slice(0, -1).join('/');
-
-        const response = await fetch(`/api/folder?path=${encodeURIComponent(folderPath)}`);
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const files = data.files || [];
-
-        // Parse all files and extract their info
-        const seriesFiles = files
-          .map(f => ({ ...f, info: readingHistory.parseSeriesInfo(f.name) }))
-          .filter(f => f.info.chapter !== null);
-
-        // If current file uses chapter-first format (no clear series name),
-        // assume all files in the same folder are part of the same series
-        const isChapterFirstFormat = /^(?:Chapter|Ch\.?|Episode|Ep\.?)\s*\d+/i.test(fileName);
-
-        let matchingFiles;
-        
-        if (isChapterFirstFormat) {
-          // For chapter-first format, match ALL files with chapter numbers in the same folder
-          matchingFiles = seriesFiles.filter(f => {
-            const fileIsChapterFirst = /^(?:Chapter|Ch\.?|Episode|Ep\.?)\s*\d+/i.test(f.name);
-            return fileIsChapterFirst;
-          });
-        } else {
-          // For series-first format, match by series name
-          matchingFiles = seriesFiles.filter(f => f.info.series === seriesInfo.series);
+        const res = await fetch(`/api/mangadex/fetch?series=${seriesId}&chapter=${chapter}`);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Failed to fetch MangaDex chapter: ${errorText}`);
         }
 
-        // Sort by chapter number
-        matchingFiles.sort((a, b) => a.info.chapter - b.info.chapter);
+        const data = await res.json();
 
-        // Find current file index
-        const currentIndex = matchingFiles.findIndex(f => {
-          const normalizedFPath = decodeURIComponent(f.path.replace(/^data\//, ''));
-          const normalizedFilePath = decodeURIComponent(filePath.replace(/^data\//, ''));
-          return normalizedFPath === normalizedFilePath;
-        });
-
-        // Check if there's a next chapter
-        if (currentIndex >= 0 && currentIndex < matchingFiles.length - 1) {
-          const nextFile = matchingFiles[currentIndex + 1];
-          nextChapterPath = nextFile.path;
-
-          // Add arrow indicator
-          const pageCounter = document.getElementById('pageCounter');
-          const currentHTML = pageCounter.innerHTML.replace(/ <span.*?▶<\/span>/, '');
-          pageCounter.innerHTML = currentHTML + ' <span style="color: #e74c3c; font-size: 0.8em;">▶</span>';
+        if (!data.baseUrl || !data.chapter || !data.chapter.data || !data.chapter.hash) {
+          throw new Error('Invalid MangaDex response format');
         }
+
+        const { baseUrl, chapter: chapterData } = data;
+        const { hash, data: imageFilenames } = chapterData;
+
+        currentImages = imageFilenames.map((filename, index) => ({
+          name: filename,
+          url: `${baseUrl}/data/${hash}/${filename}`,
+          index
+        }));
+
+        if (currentImages.length === 0) {
+          throw new Error('No images found in MangaDex chapter');
+        }
+
+        const img = document.createElement("img");
+        img.src = currentImages[0].url;
+
+        isMangaDex = true;
+        return true;
       } catch (err) {
-        console.error('Error finding next chapter:', err);
+        console.error('Error loading MangaDex chapter:', err);
+        throw err;
       }
     }
 
-    function loadNextChapter() {
-      if (nextChapterPath) {
-        const nextFileName = nextChapterPath.split('/').pop();
-        window.location.href = `/reader?file=${encodeURIComponent(nextChapterPath)}&name=${encodeURIComponent(nextFileName)}&page=1`;
-      }
-    }
-
-    async function loadFile(filePath) {
+    async function loadLocalCBZ(path) {
       try {
-        const response = await fetch('/file/' + encodeURIComponent(filePath));
-        if (!response.ok) throw new Error('Failed to load file');
-
-        const arrayBuffer = await response.arrayBuffer();
+        const res = await fetch('/file/' + encodeURIComponent(path));
+        if (!res.ok) throw new Error('Failed to load local file');
+        
+        const arrayBuffer = await res.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
-
-        const imageFiles = [];
-        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        const imageExtensions = ['.jpg','.jpeg','.png','.gif','.bmp','.webp'];
+        currentImages = [];
 
         zip.forEach((relativePath, file) => {
           if (!file.dir) {
             const ext = relativePath.toLowerCase().substring(relativePath.lastIndexOf('.'));
             if (imageExtensions.includes(ext)) {
-              imageFiles.push({ name: relativePath, file: file });
+              currentImages.push({name: relativePath, file, zipFile: file});
             }
           }
         });
 
-        if (imageFiles.length === 0) {
-          throw new Error('No images found in this file');
+        if (currentImages.length === 0) throw new Error('No images found in this file');
+        currentImages.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+        
+        isMangaDex = false;
+        return true;
+      } catch (err) {
+        console.error('Error loading CBZ file:', err);
+        throw err;
+      }
+    }
+
+    async function loadFile(path, startPageNum = 1) {
+      try {
+        if (path.startsWith('mangadex://')) {
+          const [seriesId, chapter] = path.replace('mangadex://','').split('/');
+          await loadMangaDexChapter(seriesId, chapter);
+        } else {
+          await loadLocalCBZ(path);
         }
 
-        imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
-        currentImages = imageFiles;
-
-        const savedProgress = readingHistory.getProgress(filePath);
-        if (startPage > 1) {
-          currentPage = startPage - 1;
-        } else if (savedProgress && savedProgress.currentPage > 0) {
-          currentPage = savedProgress.currentPage - 1;
+        const savedProgress = await readingHistory.getProgress(path);
+        if (startPageNum > 1) {
+          currentPage = startPageNum - 1;
+        } else if (savedProgress && savedProgress.current_page > 0) {
+          currentPage = savedProgress.current_page - 1;
         } else {
           currentPage = 0;
         }
-
+        
         if (currentPage >= currentImages.length) currentPage = 0;
 
+        await findNextChapter();
         updatePageSlider();
         await displayCurrentPage();
-
-      } catch (err) {
+      } catch(err) {
+        console.error('Error loading file:', err);
         showError(err.message);
       }
     }
 
+    async function initReader() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let filePathParam = urlParams.get('file');
+      const fileNameParam = urlParams.get('name') || 'Unknown';
+      const seriesId = urlParams.get('series');
+      const chapter = urlParams.get('chapter');
+      const startPage = parseInt(urlParams.get('page')) || 1;
+
+      if (!filePathParam && seriesId && chapter) {
+        filePathParam = `mangadex://${seriesId}/${chapter}`;
+      }
+
+      if (!filePathParam) return showError('No file specified.');
+
+      filePath = filePathParam;
+      fileName = fileNameParam === 'Unknown' ? filePath.split('/').pop() : fileNameParam;
+      
+      // CRITICAL: Parse series info from the FULL PATH, not just filename
+      seriesInfo = readingHistory.parseSeriesInfo(filePath);
+      document.getElementById('bookTitle').textContent = seriesInfo.display;
+
+      console.log('Loading file:', filePath);
+      console.log('Parsed series info:', seriesInfo);
+
+      await loadFile(filePath, startPage);
+    }
+
+    // ========= Page Navigation =========
     async function displayCurrentPage() {
+      hideNextChapterOverlay();
       if (currentImages.length === 0) return;
 
       const container = document.getElementById('readerContainer');
       container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading page...</div>';
 
       try {
-        const imageFile = currentImages[currentPage];
-        const imageData = await imageFile.file.async('blob'); 
-        const objectUrl = URL.createObjectURL(imageData);
+        const imageData = currentImages[currentPage];
+        
+        if (isMangaDex) {
+          container.innerHTML = `<div class="image-container"><img alt="Page ${currentPage + 1}" class="reader-image" src="${imageData.url}"></div>`;
+          const img = container.querySelector("img");
+          
+          img.onerror = () => {
+            showError(`Failed to load image from MangaDex: ${imageData.name}`);
+          };
+        } else {
+          const blob = await imageData.zipFile.async('blob');
+          const objectUrl = URL.createObjectURL(blob);
 
-        container.innerHTML = `
-          <div class="image-container">
-            <img alt="Page ${currentPage + 1}" class="reader-image">
-          </div>
-        `;
-
-        const img = container.querySelector("img");
-        img.src = objectUrl;
-
-        img.onload = () => {
-          URL.revokeObjectURL(objectUrl);
-        };
+          container.innerHTML = `<div class="image-container"><img alt="Page ${currentPage + 1}" class="reader-image"></div>`;
+          const img = container.querySelector("img");
+          img.src = objectUrl;
+          img.onload = () => URL.revokeObjectURL(objectUrl);
+        }
 
         updateUI();
-        saveProgress();
-
+        await saveProgress();
+        pagesReadThisSession.add(currentPage);
       } catch (err) {
+        console.error('Error displaying page:', err);
         showError('Failed to load page: ' + err.message);
       }
     }
@@ -388,10 +401,14 @@
       document.getElementById('totalPages').textContent = currentImages.length;
       document.getElementById('pageSlider').value = currentPage + 1;
 
-      document.getElementById('firstBtn').disabled = currentPage === 0;
-      document.getElementById('prevBtn').disabled = currentPage === 0;
-      document.getElementById('nextBtn').disabled = currentPage === currentImages.length - 1 && !nextChapterPath;
-      document.getElementById('lastBtn').disabled = currentPage === currentImages.length - 1 && !nextChapterPath;
+      const isFirstPage = currentPage === 0;
+      const isLastPage = currentPage === currentImages.length - 1;
+
+      document.getElementById('firstBtn').disabled = isFirstPage;
+      document.getElementById('prevBtn').disabled = isFirstPage;
+      
+      document.getElementById('nextBtn').disabled = isLastPage && !nextChapterPath;
+      document.getElementById('lastBtn').disabled = isLastPage && !nextChapterPath;
     }
 
     function updatePageSlider() {
@@ -400,119 +417,213 @@
       slider.value = currentPage + 1;
     }
 
-    function previousPage() {
-      if (currentPage > 0) {
-        currentPage--;
-        displayCurrentPage();
+    function previousPage() { 
+      if (currentPage > 0) { 
+        currentPage--; 
+        displayCurrentPage(); 
+      } 
+    }
+
+    async function nextPage() { 
+      if (currentPage < currentImages.length - 1) { 
+        currentPage++; 
+        await displayCurrentPage(); 
+      } else if (nextChapterPath && !isLoadingNextChapter) {
+        await loadNextChapter();
       }
     }
 
-    function nextPage() {
-      if (currentPage < currentImages.length - 1) {
-        currentPage++;
-        displayCurrentPage();
-      } else if (nextChapterPath) {
-        loadNextChapter();
-      }
+    function firstPage() { 
+      currentPage = 0; 
+      displayCurrentPage(); 
     }
 
-    function firstPage() {
-      currentPage = 0;
-      displayCurrentPage();
+    function lastPage() { 
+      currentPage = currentImages.length - 1; 
+      displayCurrentPage(); 
     }
 
-    function lastPage() {
-      currentPage = currentImages.length - 1;
-      displayCurrentPage();
+    function goToPage(pageNum) { 
+      currentPage = parseInt(pageNum) - 1; 
+      displayCurrentPage(); 
     }
 
-    function goToPage(pageNum) {
-      currentPage = parseInt(pageNum) - 1;
-      displayCurrentPage();
-    }
-
-    function toggleControls() {
-      const controls = document.getElementById('bottomControls');
-      isControlsVisible = !isControlsVisible;
-      controls.classList.toggle('visible', isControlsVisible);
+    function toggleControls() { 
+      const controls = document.getElementById('bottomControls'); 
+      isControlsVisible = !isControlsVisible; 
+      controls.classList.toggle('visible', isControlsVisible); 
     }
 
     function showError(message) {
       document.getElementById('readerContainer').innerHTML = `
-        <div class="error">
-          <div class="error-icon">⚠️</div>
-          <h2>Error</h2>
-          <p>${message}</p>
-          <br>
-          <a href="/library" class="back-btn">Back to Library</a>
-        </div>
-      `;
+        <div class="error"><div class="error-icon">⚠️</div><h2>Error</h2><p>${message}</p><br><a href="/library" class="back-btn">Back to Library</a></div>`;
     }
 
-    // Keyboard navigation
+    // ========= Next Chapter =========
+    async function findNextChapter() {
+      nextChapterPath = null;
+      if (!seriesInfo.series || seriesInfo.chapter === null || isNaN(seriesInfo.chapter)) {
+        console.log('Cannot find next chapter: missing series info', seriesInfo);
+        return;
+      }
+
+      try {
+        const response = await apiRequest('/api/library');
+        if (!response || !response.files) return;
+
+        const normalizedCurrentSeries = normalizeSeries(seriesInfo.series);
+        console.log('=== FINDING NEXT CHAPTER ===');
+        console.log('Current file:', filePath);
+        console.log('Current series:', seriesInfo.series, '(normalized:', normalizedCurrentSeries + ')');
+        console.log('Current chapter:', seriesInfo.chapter);
+
+        const seriesFiles = response.files
+          .map(file => ({
+            path: file.path,
+            name: file.name,
+            // CRITICAL: Parse from FULL PATH, not just name
+            info: readingHistory.parseSeriesInfo(file.path)
+          }))
+          .filter(file => {
+            const normalizedFileSeries = normalizeSeries(file.info.series);
+            const seriesMatch = normalizedFileSeries === normalizedCurrentSeries;
+            const hasValidChapter = file.info.chapter !== null && !isNaN(file.info.chapter);
+            const isNextChapter = hasValidChapter && file.info.chapter > seriesInfo.chapter;
+            const isDifferentFile = file.path !== filePath;
+            
+            if (hasValidChapter && isDifferentFile) {
+              console.log(`  ${file.path}:`);
+              console.log(`    Series: "${file.info.series}" (normalized: "${normalizedFileSeries}")`);
+              console.log(`    Chapter: ${file.info.chapter}`);
+              console.log(`    Match: ${seriesMatch && isNextChapter ? 'YES ✓' : 'NO'}`);
+            }
+            
+            return seriesMatch && hasValidChapter && isNextChapter && isDifferentFile;
+          })
+          .sort((a, b) => a.info.chapter - b.info.chapter);
+
+        if (seriesFiles.length > 0) {
+          nextChapterPath = seriesFiles[0].path;
+          console.log('✓ Next chapter found:', nextChapterPath);
+          console.log('  Chapter:', seriesFiles[0].info.chapter);
+          updateUI();
+        } else {
+          console.log('✗ No next chapter found');
+        }
+      } catch (err) {
+        console.error('Error finding next chapter:', err);
+      }
+    }
+
+    async function loadNextChapter() {
+      if (!nextChapterPath || isLoadingNextChapter) {
+        console.log('Cannot load next chapter:', { nextChapterPath, isLoadingNextChapter });
+        return;
+      }
+      if (nextChapterPath === filePath) {
+        console.log('Next chapter is same as current, skipping');
+        return;
+      }
+
+      isLoadingNextChapter = true;
+      const nextChapterInfo = readingHistory.parseSeriesInfo(nextChapterPath);
+
+      const overlay = document.getElementById('nextChapterOverlay');
+      const nameDisplay = document.getElementById('nextChapterName');
+      nameDisplay.textContent = nextChapterInfo.display;
+      overlay.style.display = 'flex';
+
+      console.log('Loading next chapter:', nextChapterPath);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      window.location.href = `/reader?file=${encodeURIComponent(nextChapterPath)}&name=${encodeURIComponent(nextChapterPath.split('/').pop())}`;
+    }
+
+    function hideNextChapterOverlay() {
+      const overlay = document.getElementById('nextChapterOverlay');
+      overlay.style.display = 'none';
+    }
+
+    // ========= Statistics =========
+    let sessionStartTime = Date.now();
+    let pagesReadThisSession = new Set();
+
+    async function saveStatistics() {
+      const timeSpent = Math.floor((Date.now() - sessionStartTime) / 60000);
+      const pagesRead = pagesReadThisSession.size;
+
+      if (timeSpent > 0 || pagesRead > 0) {
+        await apiRequest('/api/statistics', {
+          method: 'POST',
+          body: JSON.stringify({ minutes: timeSpent, pages: pagesRead })
+        });
+      }
+    }
+
+    // ========= Event Listeners =========
     document.addEventListener('keydown', (e) => {
       if (currentImages.length === 0) return;
-
       switch(e.key) {
-        case 'ArrowLeft':
-        case 'ArrowUp':
-        case 'PageUp':
-          e.preventDefault();
-          previousPage();
+        case 'ArrowLeft': case 'ArrowUp': case 'PageUp': 
+          e.preventDefault(); 
+          previousPage(); 
           break;
-        case 'ArrowRight':
-        case 'ArrowDown':
-        case 'PageDown':
-        case ' ':
-          e.preventDefault();
-          nextPage();
+        case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ': 
+          e.preventDefault(); 
+          nextPage(); 
           break;
-        case 'Home':
-          e.preventDefault();
-          firstPage();
+        case 'Home': 
+          e.preventDefault(); 
+          firstPage(); 
           break;
-        case 'End':
-          e.preventDefault();
-          lastPage();
+        case 'End': 
+          e.preventDefault(); 
+          lastPage(); 
           break;
-        case 'Escape':
-          e.preventDefault();
-          window.location.href = '/library';
+        case 'Escape': 
+          e.preventDefault(); 
+          window.location.href = '/library'; 
           break;
       }
     });
-    document.body.addEventListener('touchmove', function(e) {
-      e.preventDefault();
-    }, { passive: false });
 
-    document.addEventListener('touchstart', (e) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
+    document.addEventListener('touchstart', (e) => { 
+      touchStartX = e.touches[0].clientX; 
+      touchStartY = e.touches[0].clientY; 
     }, { passive: true });
 
     document.addEventListener('touchend', (e) => {
       if (!touchStartX || !touchStartY) return;
-
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
-
-      const diffX = touchStartX - touchEndX;
-      const diffY = touchStartY - touchEndY;
-
-      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 80) {
-        e.preventDefault();
-        if (diffX > 0) {
-          nextPage();
-        } else {
-          previousPage();
-        }
+      const diffX = touchStartX - e.changedTouches[0].clientX;
+      const diffY = touchStartY - e.changedTouches[0].clientY;
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 80) { 
+        e.preventDefault(); 
+        diffX > 0 ? nextPage() : previousPage(); 
       }
-
-      touchStartX = 0;
+      touchStartX = 0; 
       touchStartY = 0;
     }, { passive: false });
-    window.addEventListener('beforeunload', saveProgress);
+
+    window.addEventListener('resize', () => { 
+      isMobile = window.innerWidth <= 768; 
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (filePath && currentImages.length > 0) {
+        navigator.sendBeacon('/api/progress/reading', JSON.stringify({
+          filePath, fileName, currentPage: currentPage + 1, totalPages: currentImages.length, fileType: isMangaDex ? 'mangadex' : 'cbz'
+        }));
+      }
+      saveStatistics();
+    });
+
+    setInterval(saveProgress, 30000);
+
+    // ========= Init =========
+    initReader();
   </script>
+
   <div class="version-id"><%= version %></div>
 </body>
 </html>
